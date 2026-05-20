@@ -652,8 +652,8 @@
 // ═══════════════════════════════════════════════════════════
 //  ⚙️  CONFIGURACIÓN — CAMBIA ESTOS VALORES
 // ═══════════════════════════════════════════════════════════
-const SUPABASE_URL = 'https://sojasleanoiidmgktqip.supabase.co'
-const SUPABASE_KEY = 'sb_publishable_u9rIqlDH00iBhpGiE6rUNQ_Dzzl6kyi'
+const SUPABASE_URL = 'https://ndteqeazujesordoisuf.supabase.co'
+const SUPABASE_KEY = 'sb_publishable_XUX00nHI6Ls9rlDWJjxpeg_Q88YC6cn'
 // ═══════════════════════════════════════════════════════════
 
 // ── Estado global ──────────────────────────────────────────
@@ -669,7 +669,7 @@ let logEntries = []
 
 // ── Inicialización ─────────────────────────────────────────
 function init() {
-  const isConfigured = SUPABASE_URL !== 'https://sojasleanoiidmgktqip.supabase.co'
+  const isConfigured = SUPABASE_URL !== 'https://ndteqeazujesordoisuf.supabase.co'
 
   if (isConfigured) {
     document.getElementById('config-warning').style.display = 'none'
