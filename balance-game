@@ -1,0 +1,987 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>EQUILIBRIO — Juego Colaborativo XR</title>
+
+  <!-- A-Frame -->
+  <script src="https://aframe.io/releases/1.5.0/aframe.min.js"></script>
+
+  <!-- Supabase -->
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+  <style>
+    @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Share+Tech+Mono&display=swap');
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    :root {
+      --cyan: #00f5ff;
+      --magenta: #ff006e;
+      --yellow: #ffd60a;
+      --dark: #080c14;
+      --panel: rgba(8, 12, 20, 0.92);
+      --border: rgba(0, 245, 255, 0.25);
+    }
+
+    body {
+      background: var(--dark);
+      font-family: 'Share Tech Mono', monospace;
+      color: var(--cyan);
+      overflow: hidden;
+      height: 100vh;
+    }
+
+    /* ─── PANTALLA DE LOGIN ─────────────────────────────────── */
+    #login-screen {
+      position: fixed; inset: 0; z-index: 100;
+      display: flex; align-items: center; justify-content: center;
+      background: radial-gradient(ellipse at 50% 30%, #0d1f3c 0%, var(--dark) 70%);
+    }
+
+    #login-screen::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 40px,
+        rgba(0,245,255,0.03) 40px, rgba(0,245,255,0.03) 41px
+      ),
+      repeating-linear-gradient(
+        90deg, transparent, transparent 40px,
+        rgba(0,245,255,0.03) 40px, rgba(0,245,255,0.03) 41px
+      );
+      pointer-events: none;
+    }
+
+    .login-card {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 48px 56px;
+      width: 420px;
+      position: relative;
+      box-shadow: 0 0 60px rgba(0,245,255,0.08), inset 0 1px 0 rgba(0,245,255,0.1);
+    }
+
+    .login-card::before {
+      content: '';
+      position: absolute; top: 0; left: 0; right: 0;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--cyan), transparent);
+    }
+
+    .game-title {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 2.2rem;
+      font-weight: 900;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--cyan);
+      text-shadow: 0 0 20px var(--cyan);
+      margin-bottom: 4px;
+      text-align: center;
+    }
+
+    .game-subtitle {
+      font-size: 0.7rem;
+      letter-spacing: 0.3em;
+      color: rgba(0,245,255,0.4);
+      text-align: center;
+      margin-bottom: 36px;
+    }
+
+    .field-label {
+      font-size: 0.65rem;
+      letter-spacing: 0.2em;
+      color: rgba(0,245,255,0.5);
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+
+    .field-input {
+      width: 100%;
+      background: rgba(0,245,255,0.04);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 12px 16px;
+      color: var(--cyan);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1rem;
+      font-weight: 700;
+      letter-spacing: 0.1em;
+      outline: none;
+      transition: border-color 0.2s, box-shadow 0.2s;
+      margin-bottom: 28px;
+    }
+
+    .field-input:focus {
+      border-color: var(--cyan);
+      box-shadow: 0 0 16px rgba(0,245,255,0.15);
+    }
+
+    .btn-enter {
+      width: 100%;
+      background: transparent;
+      border: 1px solid var(--cyan);
+      color: var(--cyan);
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.9rem;
+      font-weight: 700;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      padding: 14px;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .btn-enter::before {
+      content: '';
+      position: absolute; inset: 0;
+      background: var(--cyan);
+      transform: translateX(-101%);
+      transition: transform 0.3s ease;
+    }
+
+    .btn-enter:hover::before { transform: translateX(0); }
+    .btn-enter:hover { color: var(--dark); }
+
+    .btn-enter span { position: relative; z-index: 1; }
+
+    /* ─── HUD OVERLAY ───────────────────────────────────────── */
+    #hud {
+      position: fixed; inset: 0; z-index: 10;
+      pointer-events: none;
+      display: none;
+    }
+
+    /* Side selection buttons */
+    .side-buttons {
+      position: absolute;
+      bottom: 40px; left: 50%; transform: translateX(-50%);
+      display: flex; gap: 16px;
+      pointer-events: all;
+    }
+
+    .btn-side {
+      background: var(--panel);
+      border: 1px solid;
+      font-family: 'Orbitron', sans-serif;
+      font-size: 0.8rem;
+      font-weight: 700;
+      letter-spacing: 0.2em;
+      padding: 14px 32px;
+      cursor: pointer;
+      transition: all 0.2s;
+      backdrop-filter: blur(10px);
+    }
+
+    .btn-side.left {
+      border-color: var(--magenta);
+      color: var(--magenta);
+    }
+    .btn-side.left:hover, .btn-side.left.active {
+      background: var(--magenta);
+      color: white;
+      box-shadow: 0 0 20px rgba(255,0,110,0.4);
+    }
+
+    .btn-side.right {
+      border-color: var(--yellow);
+      color: var(--yellow);
+    }
+    .btn-side.right:hover, .btn-side.right.active {
+      background: var(--yellow);
+      color: var(--dark);
+      box-shadow: 0 0 20px rgba(255,214,10,0.4);
+    }
+
+    /* Stats panel */
+    .stats-panel {
+      position: absolute;
+      top: 24px; left: 50%; transform: translateX(-50%);
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 2px;
+      padding: 12px 32px;
+      display: flex; align-items: center; gap: 32px;
+      backdrop-filter: blur(10px);
+      pointer-events: all;
+    }
+
+    .stat-block { text-align: center; }
+
+    .stat-number {
+      font-family: 'Orbitron', sans-serif;
+      font-size: 1.6rem;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .stat-label {
+      font-size: 0.55rem;
+      letter-spacing: 0.2em;
+      color: rgba(0,245,255,0.45);
+      text-transform: uppercase;
+      margin-top: 3px;
+    }
+
+    .stat-block.left-stat .stat-number { color: var(--magenta); text-shadow: 0 0 10px var(--magenta); }
+    .stat-block.right-stat .stat-number { color: var(--yellow); text-shadow: 0 0 10px var(--yellow); }
+    .stat-block.tilt-stat .stat-number { color: var(--cyan); font-size: 0.9rem; }
+
+    .divider {
+      width: 1px; height: 36px;
+      background: var(--border);
+    }
+
+    /* Player badge */
+    .player-badge {
+      position: absolute;
+      top: 24px; right: 24px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 10px 18px;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      backdrop-filter: blur(10px);
+      pointer-events: all;
+    }
+
+    .player-badge span {
+      font-family: 'Orbitron', sans-serif;
+      color: var(--cyan);
+      font-weight: 700;
+    }
+
+    /* Tilt indicator */
+    .tilt-bar-container {
+      position: absolute;
+      top: 90px; left: 50%; transform: translateX(-50%);
+      width: 300px;
+    }
+
+    .tilt-track {
+      height: 4px;
+      background: rgba(255,255,255,0.08);
+      border-radius: 2px;
+      position: relative;
+    }
+
+    .tilt-fill {
+      position: absolute;
+      height: 100%; top: 0;
+      border-radius: 2px;
+      transition: all 0.8s cubic-bezier(0.34,1.56,0.64,1);
+    }
+
+    .tilt-center {
+      position: absolute;
+      top: -4px; left: 50%;
+      transform: translateX(-50%);
+      width: 2px; height: 12px;
+      background: rgba(255,255,255,0.3);
+    }
+
+    /* Log */
+    .event-log {
+      position: absolute;
+      bottom: 110px; right: 24px;
+      width: 260px;
+      background: var(--panel);
+      border: 1px solid var(--border);
+      padding: 12px;
+      font-size: 0.6rem;
+      line-height: 1.8;
+      max-height: 140px;
+      overflow: hidden;
+      backdrop-filter: blur(10px);
+      pointer-events: all;
+    }
+
+    .log-title {
+      font-size: 0.55rem;
+      letter-spacing: 0.25em;
+      color: rgba(0,245,255,0.35);
+      text-transform: uppercase;
+      margin-bottom: 6px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 6px;
+    }
+
+    .log-entry { color: rgba(0,245,255,0.65); }
+    .log-entry .alias { color: var(--cyan); font-weight: bold; }
+    .log-entry .side-l { color: var(--magenta); }
+    .log-entry .side-r { color: var(--yellow); }
+
+    /* Scan line overlay */
+    #scanlines {
+      position: fixed; inset: 0; z-index: 200;
+      background: repeating-linear-gradient(
+        0deg, transparent, transparent 2px,
+        rgba(0,0,0,0.03) 2px, rgba(0,0,0,0.03) 4px
+      );
+      pointer-events: none;
+    }
+
+    /* A-Frame canvas */
+    a-scene { position: fixed !important; inset: 0; }
+
+    /* Config warning */
+    #config-warning {
+      position: fixed; inset: 0; z-index: 1000;
+      background: var(--dark);
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 20px; padding: 40px;
+      text-align: center;
+    }
+
+    #config-warning h2 {
+      font-family: 'Orbitron', sans-serif;
+      color: var(--magenta);
+      font-size: 1.4rem;
+    }
+
+    #config-warning code {
+      background: rgba(255,0,110,0.1);
+      border: 1px solid var(--magenta);
+      padding: 16px 24px;
+      font-size: 0.8rem;
+      line-height: 2;
+      max-width: 500px;
+      display: block;
+      text-align: left;
+      color: var(--cyan);
+    }
+  </style>
+</head>
+<body>
+
+<!-- ─── CONFIG WARNING (se oculta si las credenciales están puestas) ─── -->
+<div id="config-warning">
+  <h2>⚠ CONFIGURACIÓN REQUERIDA</h2>
+  <p style="color:rgba(0,245,255,0.6); font-size:0.75rem; letter-spacing:0.1em;">
+    Edita este archivo HTML y reemplaza las credenciales de Supabase:
+  </p>
+  <code>
+    const SUPABASE_URL = 'https://TU-PROYECTO.supabase.co'<br>
+    const SUPABASE_KEY = 'TU-ANON-KEY'
+  </code>
+  <p style="color:rgba(0,245,255,0.4); font-size:0.65rem; letter-spacing:0.15em;">
+    Obtén estos valores en supabase.com → Settings → API
+  </p>
+</div>
+
+<!-- ─── SCANLINES ───────────────────────────────────────────── -->
+<div id="scanlines"></div>
+
+<!-- ─── LOGIN SCREEN ─────────────────────────────────────────── -->
+<div id="login-screen" style="display:none;">
+  <div class="login-card">
+    <div class="game-title">EQUILIBRIO</div>
+    <div class="game-subtitle">COLLABORATIVE XR · REALTIME</div>
+
+    <div class="field-label">// Alias de combate</div>
+    <input
+      type="text"
+      id="alias-input"
+      class="field-input"
+      placeholder="PLAYER_001"
+      maxlength="16"
+      autocomplete="off"
+    />
+
+    <button class="btn-enter" onclick="enterGame()">
+      <span>→ INGRESAR AL SISTEMA</span>
+    </button>
+  </div>
+</div>
+
+<!-- ─── HUD ───────────────────────────────────────────────────── -->
+<div id="hud">
+  <!-- Stats top center -->
+  <div class="stats-panel">
+    <div class="stat-block left-stat">
+      <div class="stat-number" id="count-left">0</div>
+      <div class="stat-label">◀ IZQUIERDA</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat-block tilt-stat">
+      <div class="stat-number" id="tilt-label">EQUILIBRIO</div>
+      <div class="stat-label">ESTADO</div>
+    </div>
+    <div class="divider"></div>
+    <div class="stat-block right-stat">
+      <div class="stat-number" id="count-right">0</div>
+      <div class="stat-label">DERECHA ▶</div>
+    </div>
+  </div>
+
+  <!-- Tilt bar -->
+  <div class="tilt-bar-container">
+    <div class="tilt-track">
+      <div class="tilt-fill" id="tilt-fill"></div>
+      <div class="tilt-center"></div>
+    </div>
+  </div>
+
+  <!-- Player badge -->
+  <div class="player-badge">
+    JUGADOR: <span id="player-name-badge">—</span>
+  </div>
+
+  <!-- Side buttons -->
+  <div class="side-buttons">
+    <button class="btn-side left" id="btn-left" onclick="chooseSide('LEFT')">
+      ◀ IZQUIERDA
+    </button>
+    <button class="btn-side right" id="btn-right" onclick="chooseSide('RIGHT')">
+      DERECHA ▶
+    </button>
+  </div>
+
+  <!-- Event log -->
+  <div class="event-log">
+    <div class="log-title">// LOG DE EVENTOS</div>
+    <div id="event-log-content"></div>
+  </div>
+</div>
+
+<!-- ─── A-FRAME SCENE ──────────────────────────────────────── -->
+<a-scene
+  id="aframe-scene"
+  background="color: #080c14"
+  fog="type: exponential; color: #080c14; density: 0.015"
+  style="display:none;"
+>
+  <!-- Assets -->
+  <a-assets>
+    <a-mixin id="glow-cyan"
+      material="color: #00f5ff; emissive: #00f5ff; emissiveIntensity: 0.6; metalness: 0.8; roughness: 0.2"
+    ></a-mixin>
+    <a-mixin id="glow-magenta"
+      material="color: #ff006e; emissive: #ff006e; emissiveIntensity: 0.6; metalness: 0.8; roughness: 0.2"
+    ></a-mixin>
+    <a-mixin id="glow-yellow"
+      material="color: #ffd60a; emissive: #ffd60a; emissiveIntensity: 0.6; metalness: 0.8; roughness: 0.2"
+    ></a-mixin>
+  </a-assets>
+
+  <!-- Camera -->
+  <a-entity
+    camera
+    look-controls="enabled: false"
+    wasd-controls="enabled: false"
+    position="0 3.5 8"
+    rotation="-10 0 0"
+  ></a-entity>
+
+  <!-- Ambient light -->
+  <a-light type="ambient" color="#0a1628" intensity="0.8"></a-light>
+
+  <!-- Directional lights -->
+  <a-light type="directional" position="5 10 5" color="#00f5ff" intensity="0.4"></a-light>
+  <a-light type="directional" position="-5 8 -2" color="#ff006e" intensity="0.2"></a-light>
+  <a-light type="point" position="0 6 0" color="#ffffff" intensity="0.8" distance="20"></a-light>
+
+  <!-- ═══ FLOOR GRID ═══════════════════════════════════════ -->
+  <a-entity id="floor-group">
+    <!-- Base floor -->
+    <a-plane
+      position="0 -2 0"
+      rotation="-90 0 0"
+      width="60" height="60"
+      material="color: #05080f; metalness: 0.9; roughness: 0.4"
+    ></a-plane>
+
+    <!-- Grid lines X -->
+    <a-entity id="grid-x"></a-entity>
+    <!-- Grid lines Z -->
+    <a-entity id="grid-z"></a-entity>
+
+    <!-- Horizon glow left -->
+    <a-plane
+      position="-12 -1.95 0"
+      rotation="-90 0 0"
+      width="8" height="60"
+      material="color: #ff006e; emissive: #ff006e; emissiveIntensity:0.15; opacity: 0.3; transparent: true; side: double"
+    ></a-plane>
+
+    <!-- Horizon glow right -->
+    <a-plane
+      position="12 -1.95 0"
+      rotation="-90 0 0"
+      width="8" height="60"
+      material="color: #ffd60a; emissive: #ffd60a; emissiveIntensity:0.15; opacity: 0.3; transparent: true; side: double"
+    ></a-plane>
+  </a-entity>
+
+  <!-- ═══ FULCRUM (PUNTO DE APOYO) ══════════════════════ -->
+  <a-entity position="0 -2 -2">
+    <!-- Base pyramid -->
+    <a-cone
+      height="2.5" radius-bottom="0.6" radius-top="0"
+      material="color: #1a2840; emissive: #00f5ff; emissiveIntensity: 0.15; metalness: 0.95; roughness: 0.1"
+    ></a-cone>
+    <!-- Pivot sphere -->
+    <a-sphere
+      position="0 1.4 0"
+      radius="0.12"
+      mixin="glow-cyan"
+    ></a-sphere>
+    <!-- Base ring -->
+    <a-torus
+      position="0 -1.1 0"
+      radius="0.7" radius-tubular="0.04"
+      material="color: #00f5ff; emissive: #00f5ff; emissiveIntensity: 0.3; metalness: 0.9; roughness: 0.1"
+    ></a-torus>
+  </a-entity>
+
+  <!-- ═══ BEAM / BALANZA (rota con tilt) ════════════════ -->
+  <a-entity id="beam-group" position="0 0.4 -2" rotation="0 0 0">
+
+    <!-- Main beam -->
+    <a-box
+      id="main-beam"
+      width="10" height="0.18" depth="0.25"
+      material="color: #1e3055; emissive: #00f5ff; emissiveIntensity: 0.25; metalness: 0.9; roughness: 0.15"
+    ></a-box>
+
+    <!-- Beam glow strip top -->
+    <a-box
+      width="10" height="0.04" depth="0.04"
+      position="0 0.1 0"
+      material="color: #00f5ff; emissive: #00f5ff; emissiveIntensity: 1; opacity: 0.7; transparent: true"
+    ></a-box>
+
+    <!-- Center ornament -->
+    <a-box
+      width="0.3" height="0.5" depth="0.35"
+      material="color: #00f5ff; emissive: #00f5ff; emissiveIntensity: 0.6; metalness: 0.95"
+    ></a-box>
+
+    <!-- ── LEFT PLATFORM ── -->
+    <a-entity position="-4.5 -0.5 0">
+      <!-- Hanging chain left (3 links) -->
+      <a-cylinder radius="0.025" height="0.15" position="0 0.22 0"
+        material="color:#8090b0; metalness:1; roughness:0.1"></a-cylinder>
+      <a-cylinder radius="0.025" height="0.15" position="0 0.06 0"
+        material="color:#8090b0; metalness:1; roughness:0.1"></a-cylinder>
+
+      <!-- Platform plate -->
+      <a-box
+        id="platform-left"
+        width="2.5" height="0.15" depth="1.4"
+        material="color: #1a0a20; emissive: #ff006e; emissiveIntensity: 0.2; metalness: 0.9; roughness: 0.2"
+      ></a-box>
+      <!-- Platform edge glow -->
+      <a-box width="2.5" height="0.04" depth="0.04" position="0 0.1 0.7"
+        material="color:#ff006e; emissive:#ff006e; emissiveIntensity:1; opacity:0.8; transparent:true"></a-box>
+      <a-box width="2.5" height="0.04" depth="0.04" position="0 0.1 -0.7"
+        material="color:#ff006e; emissive:#ff006e; emissiveIntensity:1; opacity:0.8; transparent:true"></a-box>
+
+      <!-- L side label -->
+      <a-text
+        value="L" position="0 0.3 0"
+        align="center" font="https://cdn.aframe.io/fonts/Exo2Bold.fnt"
+        color="#ff006e" width="2"
+      ></a-text>
+
+      <!-- Player count sphere indicator LEFT -->
+      <a-sphere id="indicator-left" position="0 0.5 0" radius="0.22"
+        material="color:#ff006e; emissive:#ff006e; emissiveIntensity:0.8; opacity:0.9; transparent:true">
+      </a-sphere>
+    </a-entity>
+
+    <!-- ── RIGHT PLATFORM ── -->
+    <a-entity position="4.5 -0.5 0">
+      <a-cylinder radius="0.025" height="0.15" position="0 0.22 0"
+        material="color:#8090b0; metalness:1; roughness:0.1"></a-cylinder>
+      <a-cylinder radius="0.025" height="0.15" position="0 0.06 0"
+        material="color:#8090b0; metalness:1; roughness:0.1"></a-cylinder>
+
+      <a-box
+        id="platform-right"
+        width="2.5" height="0.15" depth="1.4"
+        material="color: #201500; emissive: #ffd60a; emissiveIntensity: 0.2; metalness: 0.9; roughness: 0.2"
+      ></a-box>
+      <a-box width="2.5" height="0.04" depth="0.04" position="0 0.1 0.7"
+        material="color:#ffd60a; emissive:#ffd60a; emissiveIntensity:1; opacity:0.8; transparent:true"></a-box>
+      <a-box width="2.5" height="0.04" depth="0.04" position="0 0.1 -0.7"
+        material="color:#ffd60a; emissive:#ffd60a; emissiveIntensity:1; opacity:0.8; transparent:true"></a-box>
+
+      <a-text
+        value="R" position="0 0.3 0"
+        align="center" font="https://cdn.aframe.io/fonts/Exo2Bold.fnt"
+        color="#ffd60a" width="2"
+      ></a-text>
+
+      <a-sphere id="indicator-right" position="0 0.5 0" radius="0.22"
+        material="color:#ffd60a; emissive:#ffd60a; emissiveIntensity:0.8; opacity:0.9; transparent:true">
+      </a-sphere>
+    </a-entity>
+
+  </a-entity><!-- /beam-group -->
+
+  <!-- ═══ FLOATING PLAYER NODES ═══════════════════════════ -->
+  <a-entity id="player-nodes-left" position="-4.5 1.2 -2"></a-entity>
+  <a-entity id="player-nodes-right" position="4.5 1.2 -2"></a-entity>
+
+  <!-- ═══ BACKGROUND ATMOSPHERE ═══════════════════════════ -->
+  <!-- Distant city pillars -->
+  <a-box position="-18 2 -25" width="1.5" height="20" depth="1.5"
+    material="color:#071020; emissive:#00f5ff; emissiveIntensity:0.05; metalness:0.9"></a-box>
+  <a-box position="-14 4 -28" width="2" height="24" depth="2"
+    material="color:#071020; emissive:#00f5ff; emissiveIntensity:0.04; metalness:0.9"></a-box>
+  <a-box position="18 3 -25" width="1.5" height="20" depth="1.5"
+    material="color:#071020; emissive:#ffd60a; emissiveIntensity:0.05; metalness:0.9"></a-box>
+  <a-box position="14 5 -28" width="2" height="28" depth="2"
+    material="color:#071020; emissive:#ffd60a; emissiveIntensity:0.04; metalness:0.9"></a-box>
+  <a-box position="0 6 -30" width="3" height="30" depth="3"
+    material="color:#071020; emissive:#8800ff; emissiveIntensity:0.06; metalness:0.9"></a-box>
+
+  <!-- Stars -->
+  <a-entity id="stars-group"></a-entity>
+
+</a-scene>
+
+<script>
+// ═══════════════════════════════════════════════════════════
+//  ⚙️  CONFIGURACIÓN — CAMBIA ESTOS VALORES
+// ═══════════════════════════════════════════════════════════
+const SUPABASE_URL = 'https://sojasleanoiidmgktqip.supabase.co'
+const SUPABASE_KEY = 'sb_publishable_u9rIqlDH00iBhpGiE6rUNQ_Dzzl6kyi'
+// ═══════════════════════════════════════════════════════════
+
+// ── Estado global ──────────────────────────────────────────
+let sbClient = null
+let playerAlias = ''
+let playerSide = null
+let playerId = null
+let sessionId = crypto.randomUUID()
+let allPlayers = []
+let currentTilt = 0
+let targetTilt = 0
+let logEntries = []
+
+// ── Inicialización ─────────────────────────────────────────
+function init() {
+  const isConfigured = SUPABASE_URL !== 'https://sojasleanoiidmgktqip.supabase.co'
+
+  if (isConfigured) {
+    document.getElementById('config-warning').style.display = 'none'
+    sbClient = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY)
+    document.getElementById('login-screen').style.display = 'flex'
+    buildGridAndStars()
+    setupBeforeUnload()
+  }
+}
+
+// ── Login ──────────────────────────────────────────────────
+async function enterGame() {
+  const input = document.getElementById('alias-input')
+  const alias = input.value.trim().toUpperCase().replace(/[^A-Z0-9_]/g, '')
+
+  if (!alias) {
+    input.style.borderColor = 'var(--magenta)'
+    input.placeholder = 'ALIAS REQUERIDO'
+    return
+  }
+
+  playerAlias = alias || 'ANON_' + Math.floor(Math.random() * 9999)
+
+  // Insertar jugador en Supabase
+  const { data, error } = await sbClient
+    .from('players')
+    .insert({ alias: playerAlias, side: null, session_id: sessionId })
+    .select()
+    .single()
+
+  if (error) {
+    console.error(error)
+    input.style.borderColor = 'var(--magenta)'
+    input.value = ''
+    input.placeholder = 'ERROR: ' + error.message
+    return
+  }
+
+  playerId = data.id
+
+  // Mostrar escena
+  document.getElementById('login-screen').style.display = 'none'
+  document.getElementById('aframe-scene').style.display = 'block'
+  document.getElementById('hud').style.display = 'block'
+  document.getElementById('player-name-badge').textContent = playerAlias
+
+  // Cargar jugadores y suscribirse
+  await loadPlayers()
+  subscribeToPlayers()
+
+  addLog(playerAlias, 'se conectó', '')
+}
+
+// ── Elegir lado ────────────────────────────────────────────
+async function chooseSide(side) {
+  if (!playerId) return
+  if (playerSide === side) return
+
+  playerSide = side
+
+  await sbClient
+    .from('players')
+    .update({ side })
+    .eq('id', playerId)
+
+  document.getElementById('btn-left').classList.toggle('active', side === 'LEFT')
+  document.getElementById('btn-right').classList.toggle('active', side === 'RIGHT')
+
+  addLog(playerAlias, 'eligió', side)
+}
+
+// ── Cargar jugadores ───────────────────────────────────────
+async function loadPlayers() {
+  const { data } = await sbClient
+    .from('players')
+    .select('*')
+
+  if (data) {
+    allPlayers = data
+    updateScene()
+  }
+}
+
+// ── Supabase Realtime ──────────────────────────────────────
+function subscribeToPlayers() {
+  sbClient
+    .channel('players-room')
+    .on('postgres_changes', {
+      event: '*',
+      schema: 'public',
+      table: 'players'
+    }, (payload) => {
+      const { eventType, new: newRow, old: oldRow } = payload
+
+      if (eventType === 'INSERT') {
+        allPlayers.push(newRow)
+        if (newRow.alias !== playerAlias) addLog(newRow.alias, 'se conectó', '')
+      }
+      else if (eventType === 'UPDATE') {
+        const idx = allPlayers.findIndex(p => p.id === newRow.id)
+        if (idx !== -1) allPlayers[idx] = newRow
+        if (newRow.side && newRow.alias !== playerAlias)
+          addLog(newRow.alias, 'cambió a', newRow.side)
+      }
+      else if (eventType === 'DELETE') {
+        allPlayers = allPlayers.filter(p => p.id !== oldRow.id)
+        if (oldRow.alias !== playerAlias) addLog(oldRow.alias, 'salió', '')
+      }
+
+      updateScene()
+    })
+    .subscribe()
+}
+
+// ── Calcular tilt ──────────────────────────────────────────
+function calculateTilt(leftCount, rightCount) {
+  const diff = leftCount - rightCount
+  if (diff === 0) return 0
+  const absDiff = Math.abs(diff)
+
+  // Escala progresiva según RF05
+  let tiltPx
+  if (absDiff <= 2) tiltPx = absDiff * 25
+  else if (absDiff <= 4) tiltPx = 50 + (absDiff - 2) * 25
+  else if (absDiff <= 6) tiltPx = 100 + (absDiff - 4) * 25
+  else tiltPx = 150 + (absDiff - 6) * 10
+
+  tiltPx = Math.min(tiltPx, 200)
+
+  return diff > 0 ? -tiltPx : tiltPx // negativo = izquierda
+}
+
+// ── Actualizar escena 3D ───────────────────────────────────
+function updateScene() {
+  const leftPlayers = allPlayers.filter(p => p.side === 'LEFT')
+  const rightPlayers = allPlayers.filter(p => p.side === 'RIGHT')
+  const leftCount = leftPlayers.length
+  const rightCount = rightPlayers.length
+  const diff = leftCount - rightCount
+
+  // HUD counters
+  document.getElementById('count-left').textContent = leftCount
+  document.getElementById('count-right').textContent = rightCount
+
+  // Tilt label
+  let tiltLabel
+  if (diff === 0) tiltLabel = 'EQUILIBRIO'
+  else if (diff < 0) tiltLabel = `▶ +${Math.abs(diff)}`
+  else tiltLabel = `◀ +${diff}`
+  document.getElementById('tilt-label').textContent = tiltLabel
+
+  // Tilt bar
+  const tiltPx = calculateTilt(leftCount, rightCount)
+  const tiltFill = document.getElementById('tilt-fill')
+  const normalizedTilt = tiltPx / 200 // -1 to 1
+  if (normalizedTilt === 0) {
+    tiltFill.style.cssText = 'left:50%; width:0; background:transparent'
+  } else if (normalizedTilt < 0) {
+    const pct = Math.abs(normalizedTilt) * 50
+    tiltFill.style.cssText = `right:50%; left:${50 - pct}%; background: linear-gradient(90deg, var(--magenta), rgba(255,0,110,0.3))`
+  } else {
+    const pct = normalizedTilt * 50
+    tiltFill.style.cssText = `left:50%; width:${pct}%; background: linear-gradient(90deg, rgba(255,214,10,0.3), var(--yellow))`
+  }
+
+  // A-Frame beam rotation
+  const beamGroup = document.getElementById('beam-group')
+  if (beamGroup) {
+    const maxAngle = 18
+    const angle = (tiltPx / 200) * maxAngle * -1 // right-heavy = negative = right goes down
+    const currentRot = beamGroup.getAttribute('rotation') || { x: 0, y: 0, z: 0 }
+    // Animate smoothly via A-Frame animation component
+    beamGroup.setAttribute('animation', {
+      property: 'rotation',
+      to: `0 0 ${angle}`,
+      dur: 800,
+      easing: 'easeInOutCubic'
+    })
+  }
+
+  // Player count indicators (scale spheres)
+  const indL = document.getElementById('indicator-left')
+  const indR = document.getElementById('indicator-right')
+  if (indL) indL.setAttribute('scale', `${0.2 + leftCount * 0.15} ${0.2 + leftCount * 0.15} ${0.2 + leftCount * 0.15}`)
+  if (indR) indR.setAttribute('scale', `${0.2 + rightCount * 0.15} ${0.2 + rightCount * 0.15} ${0.2 + rightCount * 0.15}`)
+
+  // Render player nodes
+  renderPlayerNodes(leftPlayers, rightPlayers)
+}
+
+// ── Renderizar nodos de jugadores ──────────────────────────
+function renderPlayerNodes(leftPlayers, rightPlayers) {
+  const leftContainer = document.getElementById('player-nodes-left')
+  const rightContainer = document.getElementById('player-nodes-right')
+  if (!leftContainer || !rightContainer) return
+
+  // Clear
+  while (leftContainer.firstChild) leftContainer.removeChild(leftContainer.firstChild)
+  while (rightContainer.firstChild) rightContainer.removeChild(rightContainer.firstChild)
+
+  const cols = 3
+  const spacing = 0.8
+
+  const renderNodes = (players, container, color, emissive) => {
+    players.forEach((p, i) => {
+      const col = i % cols
+      const row = Math.floor(i / cols)
+      const x = (col - 1) * spacing
+      const y = row * spacing
+      const z = 0
+
+      const node = document.createElement('a-entity')
+
+      // Body orb
+      const sphere = document.createElement('a-sphere')
+      sphere.setAttribute('radius', '0.18')
+      sphere.setAttribute('position', `${x} ${y} ${z}`)
+      sphere.setAttribute('material', `color:${color}; emissive:${emissive}; emissiveIntensity:0.7; metalness:0.8; roughness:0.2`)
+
+      // Name label
+      const label = document.createElement('a-text')
+      label.setAttribute('value', p.alias.substring(0, 8))
+      label.setAttribute('position', `${x} ${y + 0.32} ${z}`)
+      label.setAttribute('align', 'center')
+      label.setAttribute('color', color)
+      label.setAttribute('width', '1.2')
+
+      node.appendChild(sphere)
+      node.appendChild(label)
+      container.appendChild(node)
+    })
+  }
+
+  renderNodes(leftPlayers, leftContainer, '#ff006e', '#ff006e')
+  renderNodes(rightPlayers, rightContainer, '#ffd60a', '#ffd60a')
+}
+
+// ── Log de eventos ─────────────────────────────────────────
+function addLog(alias, action, side) {
+  const sideClass = side === 'LEFT' ? 'side-l' : side === 'RIGHT' ? 'side-r' : ''
+  const sideText = side ? `<span class="${sideClass}"> ${side}</span>` : ''
+  const entry = `<div class="log-entry"><span class="alias">${alias}</span> ${action}${sideText}</div>`
+
+  logEntries.unshift(entry)
+  if (logEntries.length > 6) logEntries.pop()
+
+  document.getElementById('event-log-content').innerHTML = logEntries.join('')
+}
+
+// ── Construir grilla y estrellas ───────────────────────────
+function buildGridAndStars() {
+  document.addEventListener('DOMContentLoaded', () => {
+    // Grid lines
+    const gridX = document.getElementById('grid-x')
+    const gridZ = document.getElementById('grid-z')
+
+    if (gridX && gridZ) {
+      for (let i = -15; i <= 15; i += 3) {
+        const lineX = document.createElement('a-box')
+        lineX.setAttribute('position', `${i} -1.97 0`)
+        lineX.setAttribute('width', '0.02')
+        lineX.setAttribute('height', '0.02')
+        lineX.setAttribute('depth', '40')
+        lineX.setAttribute('material', 'color: #00f5ff; emissive: #00f5ff; emissiveIntensity: 0.15; opacity: 0.3; transparent: true')
+        gridX.appendChild(lineX)
+
+        const lineZ = document.createElement('a-box')
+        lineZ.setAttribute('position', `0 -1.97 ${i}`)
+        lineZ.setAttribute('width', '40')
+        lineZ.setAttribute('height', '0.02')
+        lineZ.setAttribute('depth', '0.02')
+        lineZ.setAttribute('material', 'color: #00f5ff; emissive: #00f5ff; emissiveIntensity: 0.15; opacity: 0.3; transparent: true')
+        gridZ.appendChild(lineZ)
+      }
+    }
+
+    // Stars
+    const starsGroup = document.getElementById('stars-group')
+    if (starsGroup) {
+      for (let i = 0; i < 200; i++) {
+        const star = document.createElement('a-sphere')
+        const x = (Math.random() - 0.5) * 80
+        const y = Math.random() * 40 + 5
+        const z = (Math.random() - 0.5) * 80 - 10
+        const size = Math.random() * 0.04 + 0.01
+        star.setAttribute('position', `${x} ${y} ${z}`)
+        star.setAttribute('radius', size.toString())
+        star.setAttribute('material', `color:#ffffff; emissive:#ffffff; emissiveIntensity:${Math.random() * 0.8 + 0.2}`)
+        starsGroup.appendChild(star)
+      }
+    }
+  })
+}
+
+// ── Cleanup al cerrar ─────────────────────────────────────
+function setupBeforeUnload() {
+  window.addEventListener('beforeunload', async () => {
+    if (playerId && sbClient) {
+      await sbClient.from('players').delete().eq('id', playerId)
+    }
+  })
+}
+
+// ── Enter en input ─────────────────────────────────────────
+document.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && document.getElementById('login-screen').style.display !== 'none') {
+    enterGame()
+  }
+})
+
+// ── Arrancar ───────────────────────────────────────────────
+init()
+</script>
+</body>
+</html>
